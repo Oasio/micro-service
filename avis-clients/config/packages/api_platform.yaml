@@ -1,0 +1,26 @@
+api_platform:
+    title: 'Avis-Clients API'
+    description: 'Service de gestion des avis sur les produits du Catalogue FlexShop (Symfony + API Platform).'
+    version: '1.0.0'
+    # Recherche des ressources API via les attributs PHP sur les entités.
+    mapping:
+        paths: ['%kernel.project_dir%/src/Entity']
+    # Formats exposés : JSON-LD (HATEOAS, niveau 3 REST — slide 39), JSON simple,
+    # et html (= Swagger UI affichée quand on ouvre une ressource dans le navigateur).
+    formats:
+        jsonld: ['application/ld+json']
+        json: ['application/json']
+        html: ['text/html']
+    # Documentation : Swagger UI (html) sur /api/docs, schéma OpenAPI sur /api/docs.json
+    docs_formats:
+        html: ['text/html']
+        json: ['application/json']
+        jsonld: ['application/ld+json']
+    # Erreurs structurées type RFC 7807 (slide 40).
+    defaults:
+        stateless: true
+        cache_headers:
+            vary: ['Content-Type', 'Authorization', 'Origin']
+        extra_properties:
+            standard_put: true
+            rfc_7807_compliant_errors: true

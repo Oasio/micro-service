@@ -1,0 +1,9 @@
+framework:
+    http_client:
+        scoped_clients:
+            # Client HTTP dédié au service Catalogue (étape 6). Injecté via Symfony\Contracts\HttpClient\HttpClientInterface $catalogueClient
+            catalogue.client:
+                base_uri: '%env(CATALOGUE_BASE_URL)%'
+                timeout: 5
+                headers:
+                    Accept: 'application/json'

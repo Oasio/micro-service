@@ -1,0 +1,11 @@
+# Ne pas envoyer ces fichiers au démon Docker (build plus rapide + image propre)
+venv/
+__pycache__/
+*.pyc
+*.pyo
+db.sqlite3
+.git/
+.gitignore
+*.md
+.env
+.env.*

@@ -1,0 +1,183 @@
+% =====================================================================
+% Journée 2 — Section 4 (S8) : TP Docker et docker-compose
+% Compte rendu individuel — conteneurisation + lien Git + capture
+% Compilation : tectonic Devoir_J2_S8_Docker.tex
+% =====================================================================
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[french]{babel}
+\usepackage{mathptmx}            % Times New Roman (texte + maths)
+\usepackage[scaled=0.85]{helvet} % sans-serif assorti
+\usepackage{courier}             % mono pour le code
+\usepackage[margin=2cm]{geometry}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{ragged2e}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{caption}
+\usepackage{fancyhdr}
+\usepackage{lastpage}
+
+\captionsetup{font=small,labelfont=bf,skip=4pt}
+\graphicspath{{./}{avis-clients/}{catalog-service/}}
+
+% ---------- Couleurs sobres (noir & blanc) ----------
+\definecolor{gristexte}{gray}{0.35}
+\definecolor{codebg}{gray}{0.96}
+
+% ---------- En-tête / pied de page ----------
+\pagestyle{fancy}
+\fancyhf{}
+\fancyfoot[C]{\small\itshape\color{gristexte}Page \thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\footrulewidth}{0pt}
+
+% ---------- Style des titres ----------
+\titleformat{\section}{\normalfont\Large\bfseries}{\thesection.}{0.5em}{}[\titlerule]
+\titleformat{\subsection}{\normalfont\large\bfseries}{}{0em}{}
+\titlespacing*{\section}{0pt}{14pt}{8pt}
+\titlespacing*{\subsection}{0pt}{10pt}{4pt}
+
+% ---------- Listes plus compactes ----------
+\setlist[itemize]{leftmargin=1.4em,itemsep=2pt,topsep=3pt}
+
+% ---------- Bloc de code ----------
+\lstset{
+  basicstyle=\ttfamily\small,
+  backgroundcolor=\color{codebg},
+  frame=none,
+  framexleftmargin=4pt,
+  xleftmargin=4pt,
+  breaklines=true,
+  showstringspaces=false,
+  columns=fullflexible,
+}
+
+% Colonne X justifiée pour tabularx
+\newcolumntype{Y}{>{\RaggedRight\arraybackslash}X}
+% Colonne p à largeur fixe, alignée à gauche SANS césure (mots gardés entiers)
+\newcolumntype{P}[1]{>{\RaggedRight\arraybackslash\hyphenpenalty=10000\exhyphenpenalty=10000}p{#1}}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{4pt}
+\setlength{\emergencystretch}{2.5em}
+
+\begin{document}
+
+% =====================================================================
+% TITRE
+% =====================================================================
+\thispagestyle{empty}
+\begin{center}
+  {\LARGE\bfseries Journée 2}\\[4pt]
+  {\large\bfseries Architecture Micro-services}\\[6pt]
+  {\normalsize\itshape Section 4 \textperiodcentered{} TP Docker et docker-compose (S8)}\\[6pt]
+\end{center}
+
+\vspace{4pt}
+\hrule
+\vspace{8pt}
+
+Nom / Prénom : DANILO Elouan \hfill Équipe : \textit{[à compléter]}
+
+\vspace{6pt}
+
+% Numérotation du devoir global conservée : cette section est la 4.
+\setcounter{section}{3}
+\section{TP Docker, conteneurisation et orchestration}
+
+Un seul \texttt{docker compose up --build} démarre tout l'écosystème, soit \textbf{4 conteneurs}, \textbf{1 réseau} et \textbf{2 volumes}.
+
+\subsection{Architecture du compose}
+
+\begin{tabularx}{\textwidth}{@{}P{2.2cm} P{3.7cm} Y@{}}
+\toprule
+\textbf{Service} & \textbf{Image} & \textbf{Rôle} \\
+\midrule
+\texttt{catalog} & build Django (python:3.12) & API Catalogue, port 8000 \\[3pt]
+\texttt{catalog-db} & postgres:16 & BD du Catalogue (volume \texttt{catalog\_data}) \\[3pt]
+\texttt{avis} & build Symfony (php:8.3) & API Avis-Clients, port 8001 \\[3pt]
+\texttt{avis-db} & mariadb:10.11 & BD des Avis (volume \texttt{avis\_data}) \\
+\bottomrule
+\end{tabularx}
+
+\begin{lstlisting}
+avis:
+  build: ./avis-clients
+  environment:
+    DATABASE_URL: "mysql://root:${AVIS_DB_PASSWORD}@avis-db:3306/avis_clients?serverVersion=10.11.2-MariaDB"
+    CATALOGUE_BASE_URL: "http://catalog:8000"   # nom de service, pas localhost
+  ports: ["8001:8000"]
+  depends_on:
+    avis-db: { condition: service_healthy }
+    catalog: { condition: service_started }
+\end{lstlisting}
+
+\subsection{Difficultés rencontrées et solutions (surtout réseau)}
+
+Les conteneurs et le \texttt{docker-compose.yml} étant à écrire pour faire dialoguer deux stacks différentes, les principales difficultés ont été d'ordre réseau et démarrage.
+
+\begin{tabularx}{\textwidth}{@{}P{5.6cm} Y@{}}
+\toprule
+\textbf{Difficulté} & \textbf{Solution mise en place} \\
+\midrule
+Depuis \texttt{avis}, \texttt{localhost:8000} ne joint pas le Catalogue. & Utiliser le \textbf{nom du service} Docker \texttt{http://catalog:8000} (DNS interne du réseau), via la variable \texttt{CATALOGUE\_BASE\_URL}. \\[4pt]
+Django refusait l'appel venant de \texttt{avis} (\textit{DisallowedHost}). & Ajouter \texttt{catalog} à \texttt{ALLOWED\_HOSTS} (lu depuis une variable d'environnement). \\[4pt]
+Le service applicatif démarrait avant que sa base soit prête. & \textbf{Healthcheck} sur la BD + \texttt{depends\_on: condition: service\_healthy}. \\[4pt]
+Données perdues à chaque \texttt{docker compose down}. & \textbf{Volume nommé} sur \texttt{/var/lib/...}~; persistance vérifiée après \texttt{down}/\texttt{up}. \\[4pt]
+Le Catalogue (Django) était codé pour SQLite. & \texttt{settings.py} paramétré pour utiliser \textbf{PostgreSQL} quand \texttt{POSTGRES\_HOST} est défini, sinon SQLite (dev local). \\[4pt]
+Django~6.0 exige Python~3.12 (le slide proposait \texttt{python:3.11}). & Image de base \texttt{python:3.12-slim}. \\[4pt]
+Build lent / image lourde. & \texttt{.dockerignore} (exclure \texttt{vendor/}, \texttt{var/}, \texttt{venv/}, \texttt{.git/}). \\
+\bottomrule
+\end{tabularx}
+
+\subsection{Vérification inter-services dans Docker}
+
+Le test consiste à créer un produit dans le Catalogue, puis un avis qui le référence. La réponse est \textbf{201}, car \texttt{avis} a pu joindre \texttt{catalog} sur le réseau Docker. Avec un \texttt{productId} inexistant, la réponse devient \textbf{422}. L'appel \texttt{http://catalog:8000/api/v1/products/\{id\}/} exécuté \emph{depuis} le conteneur \texttt{avis} renvoie bien \texttt{200~OK}.
+
+\subsection{Livrables Git}
+
+Le \textbf{dépôt Git du TP Docker} est accessible à l'adresse \textit{[à compléter, https://...]}.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth]{docker-ps.png}
+  \caption{Résultat de \texttt{docker compose ps}, les 4 services Up et les 2 bases \emph{healthy}.}
+  \label{fig:docker-ps}
+\end{figure}
+
+\subsection{Conclusion}
+
+En une journée, on est passé d'un service Symfony isolé à \textbf{deux services hétérogènes} (Python/PHP, PostgreSQL/MariaDB) qui dialoguent dans Docker via leur seule API. C'est une démonstration concrète des bénéfices (isolation, reproductibilité, polyglottisme) et des défis (réseau, ordre de démarrage, persistance) d'une architecture micro-services. La suite, en J3, consistera à sécuriser par JWT et à orchestrer une \emph{saga} métier.
+
+% =====================================================================
+% ANNEXES
+% =====================================================================
+\newpage
+\appendix
+\section{Annexes, appels et réponses}
+
+Les captures suivantes ont été obtenues sur l'environnement \texttt{docker compose} en fonctionnement, avec les 4 conteneurs Up.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth]{test-inter-services.png}
+  \caption{Annexe A. Test inter-services réussi dans Docker. Un produit est créé côté Catalogue (\texttt{201}), puis un avis le référençant est accepté côté Avis-Clients (\texttt{201}). L'avis n'est créé que parce qu'Avis-Clients a pu joindre le Catalogue sur le réseau Docker.}
+  \label{fig:test-ok}
+\end{figure}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth]{test-erreurs.png}
+  \caption{Annexe B. Contrôles renvoyant \texttt{422}. À gauche, un avis sur un produit inexistant (contrôle inter-services via HttpClient). À droite, une note hors bornes (validation \texttt{\#[Assert\textbackslash Range]}).}
+  \label{fig:test-erreurs}
+\end{figure}
+
+\end{document}

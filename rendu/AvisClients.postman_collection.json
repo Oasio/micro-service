@@ -1,0 +1,97 @@
+{
+  "info": {
+    "name": "Avis-Clients API",
+    "description": "Collection de test du service Avis-Clients (Symfony + API Platform). Service sur http://localhost:8001, Catalogue (Django) sur http://localhost:8000.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8001" },
+    { "key": "reviewId", "value": "1" }
+  ],
+  "item": [
+    {
+      "name": "List reviews",
+      "request": {
+        "method": "GET",
+        "header": [ { "key": "Accept", "value": "application/ld+json" } ],
+        "url": { "raw": "{{baseUrl}}/api/reviews", "host": ["{{baseUrl}}"], "path": ["api", "reviews"] }
+      }
+    },
+    {
+      "name": "Create review (201)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/ld+json" },
+          { "key": "Accept", "value": "application/ld+json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"rating\": 5,\n  \"comment\": \"Excellent produit, je recommande !\",\n  \"productId\": 1,\n  \"author\": \"Alice\"\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/api/reviews", "host": ["{{baseUrl}}"], "path": ["api", "reviews"] }
+      }
+    },
+    {
+      "name": "Get one review",
+      "request": {
+        "method": "GET",
+        "header": [ { "key": "Accept", "value": "application/ld+json" } ],
+        "url": { "raw": "{{baseUrl}}/api/reviews/{{reviewId}}", "host": ["{{baseUrl}}"], "path": ["api", "reviews", "{{reviewId}}"] }
+      }
+    },
+    {
+      "name": "Patch review",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          { "key": "Content-Type", "value": "application/merge-patch+json" },
+          { "key": "Accept", "value": "application/ld+json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"comment\": \"Commentaire mis a jour apres reflexion.\"\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/api/reviews/{{reviewId}}", "host": ["{{baseUrl}}"], "path": ["api", "reviews", "{{reviewId}}"] }
+      }
+    },
+    {
+      "name": "Delete review",
+      "request": {
+        "method": "DELETE",
+        "header": [ { "key": "Accept", "value": "application/ld+json" } ],
+        "url": { "raw": "{{baseUrl}}/api/reviews/{{reviewId}}", "host": ["{{baseUrl}}"], "path": ["api", "reviews", "{{reviewId}}"] }
+      }
+    },
+    {
+      "name": "Create review - produit inexistant (422)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/ld+json" },
+          { "key": "Accept", "value": "application/ld+json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"rating\": 4,\n  \"comment\": \"Avis sur un produit qui n existe pas.\",\n  \"productId\": 999999,\n  \"author\": \"Bob\"\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/api/reviews", "host": ["{{baseUrl}}"], "path": ["api", "reviews"] }
+      }
+    },
+    {
+      "name": "Create review - rating > 5 (422)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/ld+json" },
+          { "key": "Accept", "value": "application/ld+json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"rating\": 6,\n  \"comment\": \"Note hors bornes.\",\n  \"productId\": 1,\n  \"author\": \"Charlie\"\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/api/reviews", "host": ["{{baseUrl}}"], "path": ["api", "reviews"] }
+      }
+    }
+  ]
+}

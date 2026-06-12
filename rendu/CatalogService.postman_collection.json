@@ -1,0 +1,94 @@
+{
+  "info": {
+    "name": "Catalog Service - FlexShop",
+    "description": "Collection de test du micro-service Catalogue (TP S4).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:8000/api/v1" }
+  ],
+  "item": [
+    {
+      "name": "Lister les produits",
+      "request": {
+        "method": "GET",
+        "url": { "raw": "{{base_url}}/products/", "host": ["{{base_url}}"], "path": ["products", ""] }
+      }
+    },
+    {
+      "name": "Detail produit 1",
+      "request": {
+        "method": "GET",
+        "url": { "raw": "{{base_url}}/products/1/", "host": ["{{base_url}}"], "path": ["products", "1", ""] }
+      }
+    },
+    {
+      "name": "Creer un produit",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Casque sans fil XYZ\",\n  \"description\": \"Casque bluetooth a reduction de bruit\",\n  \"price\": \"89.90\",\n  \"stock\": 12,\n  \"category\": \"electronics\"\n}"
+        },
+        "url": { "raw": "{{base_url}}/products/", "host": ["{{base_url}}"], "path": ["products", ""] }
+      }
+    },
+    {
+      "name": "Modifier partiellement (PATCH prix)",
+      "request": {
+        "method": "PATCH",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"price\": \"79.99\"\n}" },
+        "url": { "raw": "{{base_url}}/products/1/", "host": ["{{base_url}}"], "path": ["products", "1", ""] }
+      }
+    },
+    {
+      "name": "Remplacer (PUT)",
+      "request": {
+        "method": "PUT",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Casque XYZ v2\",\n  \"description\": \"Nouvelle version\",\n  \"price\": \"99.00\",\n  \"stock\": 20,\n  \"category\": \"electronics\"\n}"
+        },
+        "url": { "raw": "{{base_url}}/products/1/", "host": ["{{base_url}}"], "path": ["products", "1", ""] }
+      }
+    },
+    {
+      "name": "Supprimer (DELETE)",
+      "request": {
+        "method": "DELETE",
+        "url": { "raw": "{{base_url}}/products/1/", "host": ["{{base_url}}"], "path": ["products", "1", ""] }
+      }
+    },
+    {
+      "name": "Recherche (search=casque)",
+      "request": {
+        "method": "GET",
+        "url": { "raw": "{{base_url}}/products/?search=casque", "host": ["{{base_url}}"], "path": ["products", ""], "query": [{ "key": "search", "value": "casque" }] }
+      }
+    },
+    {
+      "name": "Tri par prix decroissant",
+      "request": {
+        "method": "GET",
+        "url": { "raw": "{{base_url}}/products/?ordering=-price", "host": ["{{base_url}}"], "path": ["products", ""], "query": [{ "key": "ordering", "value": "-price" }] }
+      }
+    },
+    {
+      "name": "Filtre par categorie",
+      "request": {
+        "method": "GET",
+        "url": { "raw": "{{base_url}}/products/?category=electronics", "host": ["{{base_url}}"], "path": ["products", ""], "query": [{ "key": "category", "value": "electronics" }] }
+      }
+    },
+    {
+      "name": "Bonus - stock faible",
+      "request": {
+        "method": "GET",
+        "url": { "raw": "{{base_url}}/products/low-stock/", "host": ["{{base_url}}"], "path": ["products", "low-stock", ""] }
+      }
+    }
+  ]
+}
