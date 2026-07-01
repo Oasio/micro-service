@@ -1,0 +1,32 @@
+# Point d'entrée de configuration des services du Service Commande.
+# Les fichiers de packages/ configurent les dépendances (Doctrine, API Platform, HttpClient…).
+
+parameters:
+    # URLs de base des services appelés (injectées depuis .env — S6 communication inter-services).
+    cart.base_url: '%env(CART_BASE_URL)%'
+    catalogue.base_url: '%env(CATALOGUE_BASE_URL)%'
+    payment.base_url: '%env(PAYMENT_BASE_URL)%'
+    # Mode "stub" : tant que les services Panier / Paiement n'existent pas, on simule
+    # leurs réponses de façon déterministe (true en dev, false quand les vrais services tournent).
+    cart.stub_enabled: '%env(bool:CART_STUB_ENABLED)%'
+    payment.stub_enabled: '%env(bool:PAYMENT_STUB_ENABLED)%'
+
+services:
+    _defaults:
+        autowire: true      # Injection automatique des dépendances.
+        autoconfigure: true # Enregistrement automatique (commandes, handlers Messenger, etc.).
+
+    # Rend les classes de src/ disponibles comme services (id = nom de classe complet).
+    App\:
+        resource: '../src/'
+        exclude:
+            - '../src/DependencyInjection/'
+            - '../src/Entity/'
+            - '../src/Dto/'
+            - '../src/Enum/'
+            - '../src/Message/'
+            - '../src/Service/CartItem.php'
+            - '../src/Service/ProductInfo.php'
+            - '../src/Service/PaymentResult.php'
+            - '../src/Service/Exception/'
+            - '../src/Kernel.php'

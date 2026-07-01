@@ -1,0 +1,12 @@
+# Ne pas envoyer au démon Docker (build plus rapide + image propre).
+# CRITIQUE : exclure vendor/ et var/ (régénérés dans l'image) et les .env.local.
+vendor/
+var/
+.git/
+.gitignore
+.env.local
+.env.*.local
+tests/
+.phpunit.cache/
+*.md
+postman/

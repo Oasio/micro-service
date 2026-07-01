@@ -1,0 +1,29 @@
+api_platform:
+    title: 'Commande API'
+    description: "Service Commande de FlexShop (Symfony + API Platform). Orchestre Panier, Catalogue (Django) et Paiement pour créer et suivre les commandes."
+    version: '1.0.0'
+    # Recherche des ressources API via les attributs PHP sur les entités.
+    mapping:
+        paths: ['%kernel.project_dir%/src/Entity']
+    # Formats exposés : JSON-LD (HATEOAS, niveau 3 REST), JSON simple et html (Swagger UI).
+    formats:
+        jsonld: ['application/ld+json']
+        json: ['application/json']
+        html: ['text/html']
+    # Documentation : Swagger UI (html) sur /api/docs, schéma OpenAPI sur /api/docs.json
+    docs_formats:
+        html: ['text/html']
+        json: ['application/json']
+        jsonld: ['application/ld+json']
+    # PATCH : accepter aussi application/json (et pas seulement le merge-patch+json par défaut),
+    # sinon une requête en application/json est rejetée en 415 avant d'atteindre le processor.
+    patch_formats:
+        json: ['application/merge-patch+json', 'application/json']
+    defaults:
+        stateless: true
+        cache_headers:
+            vary: ['Content-Type', 'Authorization', 'Origin']
+        extra_properties:
+            standard_put: true
+            # Erreurs structurées type RFC 7807 (problem+json).
+            rfc_7807_compliant_errors: true

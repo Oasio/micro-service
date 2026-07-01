@@ -1,0 +1,32 @@
+framework:
+    messenger:
+        # S6 — Pub/Sub : quand une commande est payée, Commande PUBLIE un événement
+        # "OrderConfirmed" sur un transport (broker). Les services Stock / Notifications /
+        # Logistique s'y abonnent → découplage (Commande ne sait pas qui écoute).
+        #
+        # En local/dev : MESSENGER_TRANSPORT_DSN=sync:// → le handler tourne en process,
+        #   démontrable sans broker installé.
+        # En prod : pointer MESSENGER_TRANSPORT_DSN vers amqp:// (RabbitMQ) et lancer un worker
+        #   (`php bin/console messenger:consume async`).
+        failure_transport: failed
+
+        transports:
+            async:
+                dsn: '%env(MESSENGER_TRANSPORT_DSN)%'
+                retry_strategy:
+                    max_retries: 3
+                    delay: 1000      # backoff exponentiel : 1s, 2s, 4s.
+                    multiplier: 2
+
+            # Dead Letter Queue : messages non traités après épuisement des retries (S6).
+            failed:
+                dsn: '%env(MESSENGER_FAILED_DSN)%'
+
+        routing:
+            App\Message\OrderConfirmed: async
+
+when@test:
+    framework:
+        messenger:
+            transports:
+                async: 'in-memory://'

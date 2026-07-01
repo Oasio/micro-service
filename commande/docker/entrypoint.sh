@@ -1,0 +1,29 @@
+#!/bin/sh
+set -e
+
+# Hôte de la base : nom du service compose "commande-db" par défaut.
+DB_HOST="${DB_HOST:-commande-db}"
+DB_PORT="${DB_PORT:-3306}"
+
+echo "[entrypoint] Attente de MariaDB sur ${DB_HOST}:${DB_PORT}..."
+i=0
+until php -r "exit(@fsockopen('${DB_HOST}', ${DB_PORT}) ? 0 : 1);" 2>/dev/null; do
+    i=$((i+1))
+    if [ "$i" -gt 30 ]; then
+        echo "[entrypoint] MariaDB injoignable après 60s, abandon."
+        exit 1
+    fi
+    sleep 2
+done
+echo "[entrypoint] MariaDB est prête."
+
+# Vide le cache puis applique les migrations (la migration livrée est en SQL MariaDB).
+php bin/console cache:clear --no-interaction || true
+php bin/console doctrine:migrations:migrate --no-interaction --allow-no-migration
+
+# Installe les assets (CSS/JS de la Swagger UI) — sinon /api/docs s'affiche sans style.
+php bin/console assets:install public --no-interaction || true
+
+echo "[entrypoint] Démarrage du serveur sur 0.0.0.0:8000"
+# router.php sert les assets statiques (CSS/JS Swagger) et délègue le reste à Symfony.
+exec php -S 0.0.0.0:8000 -t public public/router.php

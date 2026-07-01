@@ -68,9 +68,53 @@ services:
         condition: service_started
     networks: [flexshop-net]
 
+  # --- Service Commande (Symfony) + sa base MariaDB ---
+  commande-db:
+    image: mariadb:10.11
+    environment:
+      MARIADB_DATABASE: commande
+      MARIADB_ROOT_PASSWORD: ${COMMANDE_DB_PASSWORD}
+    volumes:
+      - commande_data:/var/lib/mysql
+    networks: [flexshop-net]
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  commande:
+    build: ./commande
+    environment:
+      APP_ENV: dev
+      APP_DEBUG: "1"
+      # La base : nom du service Docker "commande-db", pas localhost.
+      DATABASE_URL: "mysql://root:${COMMANDE_DB_PASSWORD}@commande-db:3306/commande?serverVersion=10.11.2-MariaDB&charset=utf8mb4"
+      # Appel inter-services : Catalogue via le nom de service Docker "catalog" (pas localhost).
+      CATALOGUE_BASE_URL: "http://catalog:8000"
+      # Service Auth (JWT) : URL JWKS pour vérifier les jetons. /api/orders exige un JWT valide.
+      JWT_JWKS_URL: "http://10.72.200.53/api/auth/jwks"
+      # Panier & Paiement n'existent pas encore → mode stub (déterministe) pour la démo.
+      CART_STUB_ENABLED: "true"
+      PAYMENT_STUB_ENABLED: "true"
+      CART_BASE_URL: "http://cart:8000"
+      PAYMENT_BASE_URL: "http://payment:8000"
+      # Événement async OrderConfirmed : sync en démo (pas de broker requis).
+      MESSENGER_TRANSPORT_DSN: "sync://"
+      MESSENGER_FAILED_DSN: "in-memory://"
+    ports:
+      - "8002:8000"          # navigateur -> http://localhost:8002
+    depends_on:
+      commande-db:
+        condition: service_healthy
+      catalog:
+        condition: service_started
+    networks: [flexshop-net]
+
 volumes:
   catalog_data:               # persiste les données PostgreSQL
   avis_data:                  # persiste les données MariaDB
+  commande_data:              # persiste les données MariaDB de Commande
 
 networks:
   flexshop-net:

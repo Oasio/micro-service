@@ -1,0 +1,159 @@
+{
+  "info": {
+    "name": "Commande API",
+    "description": "Collection de test du service Commande (Symfony + API Platform). Service sur http://localhost:8002, Catalogue (Django) sur http://localhost:8000, Auth sur http://localhost:8001. Panier & Paiement simulés (mode stub). Les endpoints /api/orders sont protégés par JWT (S12.3) : lancer d'abord 'Auth - Login' pour remplir la variable {{token}}.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8002" },
+    { "key": "authUrl", "value": "http://localhost:8001" },
+    { "key": "orderId", "value": "ORD-XXXXXXXX" },
+    { "key": "customerId", "value": "CUST001" },
+    { "key": "token", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Auth - Login (récupère le JWT)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const data = pm.response.json();",
+              "if (data && data.token) {",
+              "  pm.collectionVariables.set('token', data.token);",
+              "  pm.test('JWT reçu', () => pm.expect(data.token).to.be.a('string'));",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [ { "key": "Content-Type", "value": "application/json" } ],
+        "body": { "mode": "raw", "raw": "{\n  \"username\": \"alice\",\n  \"password\": \"customer\"\n}" },
+        "url": { "raw": "{{authUrl}}/api/auth/login", "host": ["{{authUrl}}"], "path": ["api", "auth", "login"] }
+      }
+    },
+    {
+      "name": "Health (public, sans token)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": { "raw": "{{baseUrl}}/health", "host": ["{{baseUrl}}"], "path": ["health"] }
+      }
+    },
+    {
+      "name": "List orders (401 sans token)",
+      "request": {
+        "method": "GET",
+        "header": [ { "key": "Accept", "value": "application/ld+json" } ],
+        "url": { "raw": "{{baseUrl}}/api/orders", "host": ["{{baseUrl}}"], "path": ["api", "orders"] }
+      }
+    },
+    {
+      "name": "List orders (avec token)",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Accept", "value": "application/ld+json" },
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "url": { "raw": "{{baseUrl}}/api/orders", "host": ["{{baseUrl}}"], "path": ["api", "orders"] }
+      }
+    },
+    {
+      "name": "Create order (201)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/ld+json" },
+          { "key": "Accept", "value": "application/ld+json" },
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Idempotency-Key", "value": "9f8c1e2a-7b3d-4f6a-9c2e-1a2b3c4d5e6f" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"customerId\": \"CUST001\",\n  \"cartId\": \"CART123\",\n  \"customerEmail\": \"client@example.com\",\n  \"shippingAddress\": {\n    \"street\": \"10 rue de Paris\",\n    \"city\": \"Rennes\",\n    \"postalCode\": \"35000\",\n    \"country\": \"France\"\n  }\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/api/orders", "host": ["{{baseUrl}}"], "path": ["api", "orders"] }
+      }
+    },
+    {
+      "name": "Create order - panier introuvable (422)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/ld+json" },
+          { "key": "Accept", "value": "application/ld+json" },
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"customerId\": \"CUST001\",\n  \"cartId\": \"CART_UNKNOWN\",\n  \"shippingAddress\": {\n    \"street\": \"10 rue de Paris\",\n    \"city\": \"Rennes\",\n    \"postalCode\": \"35000\",\n    \"country\": \"France\"\n  }\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/api/orders", "host": ["{{baseUrl}}"], "path": ["api", "orders"] }
+      }
+    },
+    {
+      "name": "Get order",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Accept", "value": "application/ld+json" },
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "url": { "raw": "{{baseUrl}}/api/orders/{{orderId}}", "host": ["{{baseUrl}}"], "path": ["api", "orders", "{{orderId}}"] }
+      }
+    },
+    {
+      "name": "Get customer orders",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Accept", "value": "application/ld+json" },
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "url": { "raw": "{{baseUrl}}/api/customers/{{customerId}}/orders", "host": ["{{baseUrl}}"], "path": ["api", "customers", "{{customerId}}", "orders"] }
+      }
+    },
+    {
+      "name": "Patch status (200)",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          { "key": "Content-Type", "value": "application/merge-patch+json" },
+          { "key": "Accept", "value": "application/ld+json" },
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "body": { "mode": "raw", "raw": "{\n  \"status\": \"PREPARING\"\n}" },
+        "url": { "raw": "{{baseUrl}}/api/orders/{{orderId}}/status", "host": ["{{baseUrl}}"], "path": ["api", "orders", "{{orderId}}", "status"] }
+      }
+    },
+    {
+      "name": "Patch status - transition interdite (409)",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          { "key": "Content-Type", "value": "application/merge-patch+json" },
+          { "key": "Accept", "value": "application/ld+json" },
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "body": { "mode": "raw", "raw": "{\n  \"status\": \"CREATED\"\n}" },
+        "url": { "raw": "{{baseUrl}}/api/orders/{{orderId}}/status", "host": ["{{baseUrl}}"], "path": ["api", "orders", "{{orderId}}", "status"] }
+      }
+    },
+    {
+      "name": "Cancel order (200)",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          { "key": "Accept", "value": "application/ld+json" },
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "url": { "raw": "{{baseUrl}}/api/orders/{{orderId}}", "host": ["{{baseUrl}}"], "path": ["api", "orders", "{{orderId}}"] }
+      }
+    }
+  ]
+}

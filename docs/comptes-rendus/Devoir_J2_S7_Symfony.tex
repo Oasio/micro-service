@@ -85,7 +85,7 @@
 \hrule
 \vspace{8pt}
 
-Nom / Prénom : DANILO Elouan \hfill Équipe : \textit{[à compléter]}
+Nom / Prénom : DANILO Elouan
 
 \vspace{6pt}
 
@@ -121,6 +121,8 @@ class Review
     // ... author, createdAt
 }
 \end{lstlisting}
+
+API~Platform expose alors automatiquement cinq opérations REST, à savoir \texttt{GET /api/reviews} (liste paginée), \texttt{POST /api/reviews} (création), \texttt{GET /api/reviews/\{id\}} (détail), \texttt{PATCH /api/reviews/\{id\}} (modification) et \texttt{DELETE /api/reviews/\{id\}} (suppression), le tout documenté en OpenAPI.
 
 \subsection{Appel inter-services avec HttpClient et State Processor}
 
@@ -176,6 +178,10 @@ Aucun serveur MariaDB installé en local. & Exécution sur \textbf{SQLite} via \
 \texttt{assertJsonContains()} indisponible en \texttt{WebTestCase}. & Décodage JSON manuel (\texttt{json\_decode}) puis assertions sur les champs. \\
 \bottomrule
 \end{tabularx}
+
+\subsection{Livrables}
+
+Le code, la collection Postman (\texttt{AvisClients.postman\_collection.json}) et le présent rapport sont versionnés dans le dépôt Git \texttt{https://github.com/Oasio/micro-service}. La documentation interactive Swagger est servie sur \texttt{/api/docs} (capture ci-dessous).
 
 \begin{figure}[H]
   \centering

@@ -1,0 +1,237 @@
+% =====================================================================
+% Journée 3 --- S12.3 : Intégration JWT dans le service métier Commande
+% Compte rendu individuel --- ce qui a été fait, problèmes, solutions.
+% Compilation : tectonic Devoir_J3_S12_JWT_Commande.tex
+% =====================================================================
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[french]{babel}
+\usepackage{mathptmx}            % Times New Roman
+\usepackage[scaled=0.85]{helvet}
+\usepackage{courier}
+\usepackage[margin=2cm]{geometry}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{ragged2e}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{caption}
+\usepackage{fancyhdr}
+
+\captionsetup{font=small,labelfont=bf,skip=4pt}
+\graphicspath{{./}}
+
+\definecolor{gristexte}{gray}{0.35}
+\definecolor{codebg}{gray}{0.96}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyfoot[C]{\small\itshape\color{gristexte}Page \thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\footrulewidth}{0pt}
+
+\titleformat{\section}{\normalfont\Large\bfseries}{\thesection.}{0.5em}{}[\titlerule]
+\titleformat{\subsection}{\normalfont\large\bfseries}{}{0em}{}
+\titlespacing*{\section}{0pt}{14pt}{8pt}
+\titlespacing*{\subsection}{0pt}{10pt}{4pt}
+
+\setlist[itemize]{leftmargin=1.4em,itemsep=2pt,topsep=3pt}
+
+\lstset{
+  basicstyle=\ttfamily\small,
+  backgroundcolor=\color{codebg},
+  frame=none,
+  xleftmargin=4pt,
+  breaklines=true,
+  showstringspaces=false,
+  columns=fullflexible,
+}
+
+\newcolumntype{Y}{>{\RaggedRight\arraybackslash}X}
+\newcolumntype{P}[1]{>{\RaggedRight\arraybackslash\hyphenpenalty=10000\exhyphenpenalty=10000}p{#1}}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{4pt}
+\setlength{\emergencystretch}{2.5em}
+
+% Capture : affiche l'image si présente, sinon un encadré "à insérer" (le doc compile quand même).
+\newcommand{\shot}[2]{%
+  \begin{figure}[H]\centering
+  \IfFileExists{#1}{\includegraphics[width=\textwidth]{#1}}%
+  {\fbox{\parbox[c][2.6cm][c]{0.95\textwidth}{\centering\itshape Capture à insérer : \texttt{#1}}}}%
+  \caption{#2}\end{figure}}
+
+\begin{document}
+
+% ---------------------------------------------------------------------
+\thispagestyle{empty}
+\begin{center}
+  {\LARGE\bfseries Journée 3}\\[4pt]
+  {\large\bfseries Architecture Micro-services}\\[6pt]
+  {\normalsize\itshape S12.3 \textperiodcentered{} Intégration JWT dans le service Commande}\\[6pt]
+\end{center}
+
+\vspace{4pt}\hrule\vspace{8pt}
+
+Nom / Prénom : DANILO Elouan \hfill Équipe métier : \textbf{Commande}
+
+\vspace{6pt}
+
+\section{Contexte}
+
+Mon service \textbf{Commande} (Symfony 7.4 + API Platform) gère les commandes clients, sur les
+routes \texttt{/api/orders} et \texttt{/api/customers/\{id\}/orders}. Pendant le TP S12, c'est
+l'équipe \textbf{Platform} qui s'occupe du service Auth commun~: il vérifie les identifiants,
+émet des JWT signés en \textbf{RS256} et publie sa clé publique sur \texttt{GET /api/auth/jwks}
+(le format \textbf{JWKS}). De mon côté, je devais faire en sorte que mon service vérifie
+lui-même ces jetons avant de laisser passer une requête, sans avoir à redemander quoi que ce
+soit à l'Auth une fois le login effectué.
+
+L'idée est celle du pattern classique aujourd'hui~: l'Auth signe avec sa clé privée, chaque
+service vérifie avec la clé publique. Comme la signature est asymétrique, je n'ai aucun appel
+synchrone à faire vers l'Auth pour valider un token, ce qui évite d'en faire un goulot
+d'étranglement.
+
+\section{Ce que j'ai mis en place}
+
+\subsection{Récupération de la clé publique via JWKS}
+
+Un service \texttt{AuthPublicKeyProvider} récupère la JWKS de l'Auth
+(\texttt{JWT\_JWKS\_URL}) et \textbf{met les clés en cache 1~heure}~; aucune clé n'est stockée
+dans un fichier à gérer. Chaque clé JWK (\texttt{n}, \texttt{e}) est convertie en PEM pour
+permettre la vérification par OpenSSL.
+
+\begin{lstlisting}
+$jwks = $httpClient->request('GET', $this->jwksUrl, ['timeout' => 3])->toArray();
+foreach ($jwks['keys'] as $jwk) {
+    $pems[$jwk['kid']] = JwkConverter::toPem($jwk);  // JWK (n,e) -> PEM
+}
+// mis en cache 1h via CacheInterface
+\end{lstlisting}
+
+En Docker, l'Auth est appelé par son \textbf{nom de service} (\texttt{http://auth-service:8000})
+et non \texttt{localhost} (piège S12.4 n\textsuperscript{o}1).
+
+\subsection{Vérification de la signature RS256 à chaque requête}
+
+Un \texttt{JwtAuthenticator} (firewall Symfony) intercepte chaque requête protégée, extrait le
+\texttt{Authorization: Bearer <jwt>}, et vérifie la signature avec la clé publique~:
+
+\begin{lstlisting}
+if ($header['alg'] !== 'RS256') { throw ...; }      // on REFUSE none / HS256
+$ok = openssl_verify("$headerB64.$payloadB64",
+        Base64Url::decode($signatureB64), $pem, OPENSSL_ALGO_SHA256);
+if ($ok !== 1) { throw new RuntimeException('Signature JWT invalide.'); }
+\end{lstlisting}
+
+\subsection{Vérification de l'expiration}
+
+Après contrôle de la signature, le claim \texttt{exp} est systématiquement vérifié~; un token
+expiré est rejeté en \textbf{401} (tolérance d'horloge de 30~s).
+
+\begin{lstlisting}
+if (isset($claims['exp']) && time() > ((int) $claims['exp'] + 30)) {
+    throw new RuntimeException('JWT expiré.');
+}
+\end{lstlisting}
+
+\subsection{Endpoints protégés (\texttt{security.yaml})}
+
+Le firewall protège \texttt{/api/orders} et \texttt{/api/customers}~; \texttt{/health} et la
+documentation \texttt{/api/docs} restent publics.
+
+\begin{lstlisting}
+# config/packages/security.yaml
+firewalls:
+    api:
+        pattern: ^/api/(orders|customers)
+        stateless: true
+        custom_authenticators: [App\Security\JwtAuthenticator]
+access_control:
+    - { path: ^/api/(orders|customers), roles: IS_AUTHENTICATED_FULLY }
+\end{lstlisting}
+
+\section{Problèmes rencontrés et solutions}
+
+\begin{tabularx}{\textwidth}{@{}P{6.0cm} Y@{}}
+\toprule
+\textbf{Problème} & \textbf{Solution mise en place} \\
+\midrule
+La librairie \texttt{firebase/php-jwt} était bloquée par un avis de sécurité Composer. &
+Vérification RS256 réalisée en \textbf{PHP/OpenSSL pur} (\texttt{openssl\_verify}), sans
+dépendance externe ni faille connue. \\[4pt]
+Le bundle \texttt{LexikJWT} exige la clé publique dans un \textbf{fichier PEM}, incompatible
+avec \og JWKS récupérée automatiquement, sans fichier\fg{}. &
+Bascule sur une \textbf{vérification JWKS native} via un authenticator Symfony maison~;
+Lexik a été entièrement retiré (Composer + config). \\[4pt]
+La clé JWKS est un \textbf{JWK} (\texttt{n}/\texttt{e}) alors qu'OpenSSL attend un
+\textbf{PEM} (piège S12.4 n\textsuperscript{o}2~: \og PEM vs JWK incompatibles\fg{}). &
+Conversion \texttt{jwkToPem} (encodage ASN.1 DER) écrite à la main et \textbf{vérifiée
+identique} à la clé d'origine par un test unitaire. \\[4pt]
+En tests, le \texttt{WebTestCase} rebootait le kernel entre deux requêtes, perdant les doubles. &
+\texttt{\$client->disableReboot()} pour conserver les services simulés sur toute la requête. \\[4pt]
+L'opération \texttt{PATCH} renvoyait \texttt{415} pour un \texttt{Content-Type:
+application/json}. &
+Ajout de \texttt{patch\_formats} acceptant \texttt{application/json} en plus de
+\texttt{merge-patch+json}. \\[4pt]
+\texttt{openssl\_pkey\_export} échouait sous Windows (config OpenSSL introuvable) pour générer
+la paire de test. &
+Génération de la paire RSA de test via le \textbf{CLI openssl}, embarquée dans les fixtures de
+test. \\
+\bottomrule
+\end{tabularx}
+
+\section{Tests bout-en-bout}
+
+\subsection{Suite automatisée}
+
+\texttt{php vendor/bin/phpunit} \textrightarrow{} \textbf{24 tests, 53 assertions} au vert,
+dont les 4 cas d'authentification~: sans token (401), token malformé (401), token expiré (401),
+token valide (200).
+
+\subsection{Parcours réel contre le service Auth de Platform}
+
+Vérifié en direct contre l'Auth réel (\texttt{http://10.72.200.53}) et le Catalogue Django.
+
+\begin{tabularx}{\textwidth}{@{}P{8.2cm} Y@{}}
+\toprule
+\textbf{Requête} & \textbf{Résultat} \\
+\midrule
+\texttt{GET /api/orders} sans token & \textbf{401} \\[3pt]
+\texttt{POST /api/auth/login} (Auth) puis \texttt{GET /api/orders} avec \texttt{Bearer} & \textbf{200} \\[3pt]
+\texttt{GET /api/orders} avec un token bidon & \textbf{401} \\[3pt]
+\texttt{POST /api/orders} avec token valide & \textbf{201}, \texttt{status=PAID}, total au prix officiel du Catalogue \\[3pt]
+\texttt{GET /health} (public) & \textbf{200} \\
+\bottomrule
+\end{tabularx}
+
+La collection Postman (\texttt{commande/postman/Commande.postman\_collection.json}) automatise
+ces cas~: une requête \og Auth - Login\fg{} récupère le JWT dans une variable \texttt{\{\{token\}\}},
+réutilisée par toutes les requêtes commande.
+
+\section{Conclusion}
+
+Au final, mon service vérifie tout seul les JWT RS256 émis par l'Auth~: il récupère la clé
+publique via JWKS, contrôle la signature et l'expiration à chaque requête, et ferme les
+endpoints sensibles à toute requête sans jeton valide. Une fois le login fait, plus aucun appel
+vers l'Auth n'est nécessaire. Les deux points qui m'ont vraiment posé problème, l'incompatibilité
+JWK/PEM et la contrainte \og sans fichier\fg{}, ont fini par être réglés avec une vérification
+JWKS écrite à la main et une conversion JWK vers PEM maison, le tout couvert par les tests et un
+parcours bout-en-bout réussi contre l'infrastructure réelle.
+
+% ---------------------------------------------------------------------
+\newpage
+\appendix
+\section{Annexes : captures d'écran}
+
+\shot{commande-swagger.png}{Annexe A. Swagger UI du service Commande (\texttt{/api/docs}) : les six opérations du contrat et le bouton \emph{Authorize} (JWT).}
+\shot{commande-parcours.png}{Annexe B. Parcours JWT bout-en-bout \textbf{en direct contre l'Auth réel} (\texttt{10.72.200.53}) : \texttt{GET /api/orders} sans token \textrightarrow{} \texttt{401} ; \texttt{POST /api/auth/login} \textrightarrow{} JWT RS256 (payload \texttt{sub}, \texttt{roles}, \texttt{exp} décodés) ; même requête avec \texttt{Bearer} valide \textrightarrow{} \texttt{200} (clé publique JWKS vérifiée) ; token bidon \textrightarrow{} \texttt{401} (\og Signature JWT invalide\fg{}).}
+\shot{commande-tests.png}{Annexe C. Suite PHPUnit : 24 tests au vert (dont les 4 cas JWT : sans token 401, token bidon 401, token expiré 401, token valide 200) et la conversion JWK\,\textrightarrow\,PEM.}
+
+\end{document}

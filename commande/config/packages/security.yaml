@@ -1,0 +1,28 @@
+security:
+    # Provider stateless : l'utilisateur est reconstruit à partir du JWT déjà vérifié
+    # (pas de base d'utilisateurs côté Commande).
+    providers:
+        jwt_provider:
+            id: App\Security\JwtUserProvider
+
+    firewalls:
+        dev:
+            pattern: ^/(_(profiler|wdt)|css|images|js)/
+            security: false
+
+        # Endpoints métier protégés par JWT (S12.3 étape 3).
+        # Authenticator maison : vérifie le JWT RS256 avec la clé publique récupérée via JWKS.
+        api:
+            pattern: ^/api/(orders|customers)
+            stateless: true
+            provider: jwt_provider
+            custom_authenticators:
+                - App\Security\JwtAuthenticator
+
+        # Le reste (/, /health, /api/docs, /api, /api/contexts…) reste public.
+        main:
+            lazy: true
+            security: false
+
+    access_control:
+        - { path: ^/api/(orders|customers), roles: IS_AUTHENTICATED_FULLY }

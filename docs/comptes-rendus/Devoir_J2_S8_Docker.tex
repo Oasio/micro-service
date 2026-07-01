@@ -85,7 +85,7 @@
 \hrule
 \vspace{8pt}
 
-Nom / Prénom : DANILO Elouan \hfill Équipe : \textit{[à compléter]}
+Nom / Prénom : DANILO Elouan
 
 \vspace{6pt}
 
@@ -120,6 +120,17 @@ avis:
     catalog: { condition: service_started }
 \end{lstlisting}
 
+\subsection{Les deux Dockerfiles}
+
+Chaque service embarque son propre Dockerfile.
+
+\begin{itemize}
+  \item \textbf{Catalogue (Django)} part de \texttt{python:3.12-slim}. Il installe les dépendances avec \texttt{pip install -r requirements.txt}, copie le code, puis applique les migrations et lance le serveur (\texttt{manage.py migrate} suivi de \texttt{runserver 0.0.0.0:8000}).
+  \item \textbf{Avis-Clients (Symfony)} part de \texttt{php:8.3-cli} avec les extensions \texttt{intl}, \texttt{pdo\_mysql} et \texttt{zip}, et Composer. Après \texttt{composer install}, un script \texttt{entrypoint.sh} attend que MariaDB soit joignable, applique les migrations Doctrine, puis démarre le serveur via \texttt{public/router.php}.
+\end{itemize}
+
+Un \texttt{.dockerignore} par service exclut \texttt{vendor/}, \texttt{var/}, \texttt{venv/} et \texttt{.git/} du contexte de build, ce qui allège les images.
+
 \subsection{Difficultés rencontrées et solutions (surtout réseau)}
 
 Les conteneurs et le \texttt{docker-compose.yml} étant à écrire pour faire dialoguer deux stacks différentes, les principales difficultés ont été d'ordre réseau et démarrage.
@@ -144,7 +155,7 @@ Le test consiste à créer un produit dans le Catalogue, puis un avis qui le ré
 
 \subsection{Livrables Git}
 
-Le \textbf{dépôt Git du TP Docker} est accessible à l'adresse \textit{[à compléter, https://...]}.
+Le \textbf{dépôt Git} du projet (les 2 Dockerfile, le \texttt{docker-compose.yml}, le \texttt{.env.example} et le README) est accessible à l'adresse \texttt{https://github.com/Oasio/micro-service}.
 
 \begin{figure}[H]
   \centering

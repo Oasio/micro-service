@@ -1,0 +1,40 @@
+framework:
+    http_client:
+        # Patterns de fiabilité S6 : chaque appel sortant a un timeout + un retry avec backoff
+        # exponentiel (1s, 2s, 4s). Le circuit breaker est géré applicativement (App\Service\CircuitBreaker).
+        scoped_clients:
+            # --- Service Panier : récupération du contenu du panier ---
+            cart.client:
+                base_uri: '%env(CART_BASE_URL)%'
+                timeout: 5          # jamais d'appel sans timeout (slide S6).
+                max_duration: 10
+                headers:
+                    Accept: 'application/json'
+                retry_failed:
+                    max_retries: 3
+                    delay: 1000      # 1ʳᵉ tentative après 1s…
+                    multiplier: 2    # …puis 2s, 4s (backoff exponentiel).
+
+            # --- Service Catalogue (Django) : prix officiel + existence produit ---
+            catalogue.client:
+                base_uri: '%env(CATALOGUE_BASE_URL)%'
+                timeout: 5
+                max_duration: 10
+                headers:
+                    Accept: 'application/json'
+                retry_failed:
+                    max_retries: 3
+                    delay: 1000
+                    multiplier: 2
+
+            # --- Service Paiement : débit synchrone du client ---
+            payment.client:
+                base_uri: '%env(PAYMENT_BASE_URL)%'
+                timeout: 5
+                max_duration: 10
+                headers:
+                    Accept: 'application/json'
+                retry_failed:
+                    max_retries: 3
+                    delay: 1000
+                    multiplier: 2
