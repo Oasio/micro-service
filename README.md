@@ -87,6 +87,26 @@ docker compose down -v                 # tout supprimer, volumes inclus
 - **Catalogue** : `settings.py` bascule sur PostgreSQL si `POSTGRES_HOST` est défini,
   sinon SQLite (dev local). `ALLOWED_HOSTS` inclut `catalog` (nom de service Docker).
 
+## CI/CD (J4 — S14)
+
+Le service **Avis-Clients** dispose d'un pipeline CI/CD sur un dépôt GitHub dédié :
+**https://github.com/Oasio/avis-clients-cicd** (GitHub Actions, `.github/workflows/ci.yml`).
+
+À chaque `push` sur `main`, le pipeline enchaîne 4 stages :
+
+- **test** : PHPUnit sur une base SQLite jetable (`doctrine:schema:create`)
+- **build** : construction de l'image Docker
+- **package** : push sur le GitHub Container Registry → `ghcr.io/oasio/avis-clients-cicd:latest` (+ tag par hash de commit)
+- **deploy** (bonus) : déploiement simulé, manuel via un environnement `production` protégé
+
+Récupérer l'image publiée :
+
+```bash
+docker pull ghcr.io/oasio/avis-clients-cicd:latest
+```
+
+Compte rendu : `rendu/J4_S14_CICD_DANILO_Elouan.pdf`.
+
 ## Structure du dépôt
 
 ```
@@ -107,17 +127,22 @@ J1/
 │
 ├── rendu/                      # LIVRABLES FINAUX à rendre
 │   ├── J1_archi_micro-service_DANILO_Elouan.pdf
-│   ├── J2_archi_micro-service_DANILO_Elouan.pdf
+│   ├── J2_S7_Symfony_DANILO_Elouan.pdf
+│   ├── J2_S8_Docker_DANILO_Elouan.pdf
+│   ├── J3_S12_JWT_DANILO_Elouan.pdf
+│   ├── J4_S14_CICD_DANILO_Elouan.pdf
 │   ├── CatalogService.postman_collection.json
 │   └── AvisClients.postman_collection.json
 │
 └── docs/                       # sources & supports (non rendus tels quels)
     ├── comptes-rendus/         # sources LaTeX + figures + PDF compilés
     │   ├── Devoir_J1_compte_rendu.tex / .pdf
-    │   ├── Devoir_J2_compte_rendu.tex / .pdf
-    │   ├── build_report.py
-    │   └── *.png               # figures (swagger, docker ps, tests)
+    │   ├── Devoir_J2_S7_Symfony.tex / .pdf
+    │   ├── Devoir_J2_S8_Docker.tex / .pdf
+    │   ├── Devoir_J3_S12_JWT_Commande.tex / .pdf
+    │   ├── Devoir_J4_S14_CICD.tex / .pdf
+    │   └── *.png               # figures (swagger, docker ps, tests, pipeline)
     └── cours/                  # supports de cours (pdf / pptx / docx) + guides
 ```
 
-> Recompiler un compte rendu : `cd docs/comptes-rendus && tectonic Devoir_J2_compte_rendu.tex`
+> Recompiler un compte rendu : `cd docs/comptes-rendus && tectonic Devoir_J4_S14_CICD.tex`

@@ -1,0 +1,217 @@
+% =====================================================================
+% Journée 4 --- S14 : TP CI/CD (pipeline GitHub Actions, service Avis-Clients)
+% Compte rendu individuel --- ce qui a été fait, problèmes, solutions.
+% Compilation : tectonic Devoir_J4_S14_CICD.tex
+% =====================================================================
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[french]{babel}
+\usepackage{mathptmx}            % Times New Roman
+\usepackage[scaled=0.85]{helvet}
+\usepackage{courier}
+\usepackage[margin=2cm]{geometry}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{ragged2e}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{caption}
+\usepackage{fancyhdr}
+
+\captionsetup{font=small,labelfont=bf,skip=4pt}
+\graphicspath{{./}}
+
+\definecolor{gristexte}{gray}{0.35}
+\definecolor{codebg}{gray}{0.96}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyfoot[C]{\small\itshape\color{gristexte}Page \thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\footrulewidth}{0pt}
+
+\titleformat{\section}{\normalfont\Large\bfseries}{\thesection.}{0.5em}{}[\titlerule]
+\titleformat{\subsection}{\normalfont\large\bfseries}{}{0em}{}
+\titlespacing*{\section}{0pt}{14pt}{8pt}
+\titlespacing*{\subsection}{0pt}{10pt}{4pt}
+
+\setlist[itemize]{label=\textbullet,leftmargin=1.4em,itemsep=2pt,topsep=3pt}
+
+\lstset{
+  basicstyle=\ttfamily\small,
+  backgroundcolor=\color{codebg},
+  frame=none,
+  xleftmargin=4pt,
+  breaklines=true,
+  showstringspaces=false,
+  columns=fullflexible,
+}
+
+\newcolumntype{Y}{>{\RaggedRight\arraybackslash}X}
+\newcolumntype{P}[1]{>{\RaggedRight\arraybackslash\hyphenpenalty=10000\exhyphenpenalty=10000}p{#1}}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{4pt}
+\setlength{\emergencystretch}{2.5em}
+
+% Capture : affiche l'image si présente, sinon un encadré "à insérer" (le doc compile quand même).
+\newcommand{\shot}[2]{%
+  \begin{figure}[H]\centering
+  \IfFileExists{#1}{\includegraphics[width=\textwidth]{#1}}%
+  {\fbox{\parbox[c][2.6cm][c]{0.95\textwidth}{\centering\itshape Capture à insérer : \texttt{#1}}}}%
+  \caption{#2}\end{figure}}
+
+\begin{document}
+
+% ---------------------------------------------------------------------
+\thispagestyle{empty}
+\begin{center}
+  {\LARGE\bfseries Journée 4}\\[4pt]
+  {\large\bfseries Architecture Micro-services}\\[6pt]
+  {\normalsize\itshape S14 \textperiodcentered{} TP CI/CD : pipeline automatisé du service Avis-Clients}\\[6pt]
+\end{center}
+
+\vspace{4pt}\hrule\vspace{8pt}
+
+Nom / Prénom : DANILO Elouan \hfill Service : \textbf{Avis-Clients}
+
+\vspace{4pt}
+
+Dépôt : \texttt{https://github.com/Oasio/avis-clients-cicd}
+
+Image : \texttt{ghcr.io/oasio/avis-clients-cicd:latest}
+
+\vspace{6pt}
+
+\section{Contexte}
+
+Le TP consiste à doter mon service \textbf{Avis-Clients} (Symfony 7 + API Platform) d'un
+\textbf{pipeline CI/CD complet}~: à chaque \texttt{push}, on lance les tests, on construit une
+image Docker, et on la publie dans un \emph{Container Registry}, prête à déployer.
+
+Le polycopié s'appuie sur \textbf{GitLab.com}. J'ai réalisé le TP sur \textbf{GitHub}, l'équivalent
+présenté en cours (S13.1)~: \textbf{GitHub Actions} pour le pipeline (fichier
+\texttt{.github/workflows/ci.yml}) et le \textbf{GitHub Container Registry} (\texttt{ghcr.io}) pour
+l'image. La logique reste identique~: stages séquentiels, tag par hash de commit, déploiement
+manuel. Les principales adaptations~: le runner GitHub fournit déjà Docker (pas besoin de
+\emph{docker-in-docker}), et le \texttt{when: manual} de GitLab est reproduit par un
+\textbf{environnement protégé}.
+
+\section{Le pipeline mis en place}
+
+Le workflow se déclenche \textbf{automatiquement à chaque \texttt{push} sur \texttt{main}}
+(et manuellement via \texttt{workflow\_dispatch}). Il enchaîne quatre stages~:
+
+\begin{itemize}
+  \item \textbf{test} : PHPUnit sur une base SQLite jetable~;
+  \item \textbf{build} : construction de l'image Docker à partir du \texttt{Dockerfile}~;
+  \item \textbf{package} : push de l'image sur \texttt{ghcr.io} (tags \texttt{:<sha>} et \texttt{:latest})~;
+  \item \textbf{deploy} \emph{(bonus)} : déploiement simulé, déclenché manuellement.
+\end{itemize}
+
+\subsection{Stage TEST}
+
+Les tests d'API persistent réellement des avis~: il faut donc une base. Plutôt que de lancer un
+serveur MariaDB dans la CI, je surcharge \texttt{DATABASE\_URL} vers une base \textbf{SQLite}
+jetable, et je crée le schéma depuis les métadonnées de l'entité.
+
+\begin{lstlisting}
+test:
+  runs-on: ubuntu-latest
+  container: { image: php:8.3-cli }
+  env:
+    APP_ENV: test
+    DATABASE_URL: "sqlite:///%kernel.project_dir%/var/data_test.db"
+  steps:
+    - uses: actions/checkout@v4
+    - run: docker-php-ext-install intl pdo_mysql pdo_sqlite zip
+    - run: composer install --no-interaction --prefer-dist
+    - run: php bin/console doctrine:schema:create --no-interaction
+    - run: php bin/phpunit          # 8 tests au vert
+\end{lstlisting}
+
+\subsection{Stages BUILD et PACKAGE}
+
+Le stage \texttt{build} vérifie que l'image se construit. Le stage \texttt{package} se connecte au
+registry avec le \texttt{GITHUB\_TOKEN} auto-généré (aucun identifiant en dur) puis pousse l'image
+taguée par le hash court du commit \emph{et} par \texttt{latest}.
+
+\begin{lstlisting}
+package:
+  needs: build
+  permissions: { packages: write }
+  steps:
+    - run: echo "$GITHUB_TOKEN" | docker login ghcr.io -u $ACTOR --password-stdin
+    - run: |
+        IMAGE=$(echo "$IMAGE_NAME" | tr '[:upper:]' '[:lower:]')   # ghcr = minuscules
+        docker build -t "$IMAGE:${GITHUB_SHA::7}" -t "$IMAGE:latest" .
+        docker push "$IMAGE:${GITHUB_SHA::7}"
+        docker push "$IMAGE:latest"
+\end{lstlisting}
+
+\subsection{Stage DEPLOY (bonus)}
+
+GitHub Actions n'a pas de \texttt{when: manual} par job. Je reproduis le comportement avec un
+\textbf{environnement \texttt{production}} protégé par un \emph{required reviewer}~: le job
+\texttt{deploy} reste en attente tant qu'il n'est pas approuvé dans l'interface. Le déploiement
+lui-même est simulé (un \texttt{echo}), aucun serveur n'étant requis pour le TP.
+
+\section{Problèmes rencontrés et solutions}
+
+\begin{tabularx}{\textwidth}{@{}P{6.2cm} Y@{}}
+\toprule
+\textbf{Problème} & \textbf{Solution mise en place} \\
+\midrule
+Les tests d'API (\texttt{WebTestCase}) écrivent en base~; aucun serveur MariaDB n'est disponible
+dans le runner CI. &
+Surcharge de \texttt{DATABASE\_URL} vers une base \textbf{SQLite} jetable dans le job. Les variables
+d'environnement réelles étant prioritaires sur les fichiers \texttt{.env}, la config MariaDB du
+projet reste intacte. \\[4pt]
+La migration livrée (\texttt{Version20260612000000}) est du SQL \textbf{MariaDB pur}
+(\texttt{AUTO\_INCREMENT}, \texttt{ENGINE=InnoDB}), non rejouable sur SQLite. &
+En CI, création du schéma via \texttt{doctrine:schema:create} (généré depuis les métadonnées de
+l'entité, indépendant du SGBD) au lieu de rejouer la migration. \\[4pt]
+Le registry \texttt{ghcr.io} refuse les noms d'image en majuscules, or
+\texttt{github.repository} contient \texttt{Oasio}. &
+Passage en minuscules dans le script avec \texttt{tr '[:upper:]' '[:lower:]'} avant chaque
+\texttt{docker build/push}. \\[4pt]
+Authentification au registry sans écrire de secret. &
+Login via le \texttt{GITHUB\_TOKEN} auto-généré et permission \texttt{packages: write} sur le job,
+soit l'équivalent des variables \texttt{\$CI\_REGISTRY\_*} de GitLab. \\[4pt]
+Reproduire le \texttt{when: manual} de GitLab, absent de GitHub Actions. &
+Job \texttt{deploy} rattaché à un \textbf{environnement \texttt{production}} protégé par un
+\emph{required reviewer}~: il ne démarre qu'après approbation manuelle. \\
+\bottomrule
+\end{tabularx}
+
+\section{Résultat}
+
+Le dernier pipeline passe \textbf{intégralement au vert} (statut \emph{Success}, 5\,min\,15\,s),
+et l'image est bien publiée dans le registry, taguée \texttt{latest} et par le hash du commit.
+Le déclenchement est automatique à chaque \texttt{push} sur \texttt{main}, et tous les stages
+attendus (test, build, package) sont exécutés, plus le déploiement manuel en bonus.
+
+\section{Conclusion}
+
+Mon service Avis-Clients dispose désormais d'un pipeline CI/CD versionné qui, à chaque \texttt{push},
+teste le code, construit l'image Docker et la publie sur \texttt{ghcr.io}, prête à déployer. Les
+deux points qui m'ont demandé le plus d'ajustement, faire tourner les tests sans serveur de base
+et publier proprement sur le registry, ont été réglés respectivement par une base SQLite jetable
+(schéma créé depuis l'entité) et par un login au registry via le jeton auto-généré. Le déploiement
+manuel via environnement protégé apporte le point bonus tout en évitant tout déploiement accidentel.
+
+% ---------------------------------------------------------------------
+\newpage
+\appendix
+\section{Annexes : captures d'écran}
+
+\shot{s14-pipeline.png}{Annexe A. Dernier pipeline GitHub Actions en \textbf{succès} (\texttt{Success}, 5\,min\,15\,s). Les quatre stages \texttt{test} \textrightarrow{} \texttt{build} \textrightarrow{} \texttt{package} \textrightarrow{} \texttt{deploy} sont verts~; déclenché via \texttt{push} sur \texttt{main}.}
+\shot{s14-registry.png}{Annexe B. GitHub Container Registry (\texttt{ghcr.io}) : l'image \texttt{avis-clients-cicd} est publiée et taguée \texttt{latest} (et par le hash court du commit). Commande de récupération~: \texttt{docker pull ghcr.io/oasio/avis-clients-cicd:latest}.}
+
+\end{document}
