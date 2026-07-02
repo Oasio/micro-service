@@ -1,24 +1,57 @@
-# FlexShop — Orchestration Docker (S8)
+# FlexShop — Architecture micro-services
 
-Deux services communs du projet FlexShop, conteneurisés et orchestrés par
-**docker compose** : ils démarrent ensemble et communiquent sur un réseau Docker privé.
+Projet **FlexShop** : une boutique en ligne découpée en micro-services indépendants,
+chacun avec sa propre base de données, communiquant par HTTP sur un réseau Docker privé.
 
-| Service | Stack | Base de données | Port (hôte) |
-|---------|-------|-----------------|-------------|
-| **catalog** | Django + DRF | PostgreSQL 16 (`catalog-db`) | http://localhost:8000 |
-| **avis** | Symfony + API Platform | MariaDB 10.11 (`avis-db`) | http://localhost:8001 |
+Ce dépôt regroupe les services **développés** au fil des journées (Catalogue, Avis-Clients,
+Commande) et, à titre de référence, les services de l'équipe **Platform** (gateway + Auth)
+et le service **Paiement**.
+
+Auteur : **DANILO Elouan**.
+
+## Services
+
+### Développés dans ce dépôt
+
+| Service | Rôle | Stack | Base de données | Port (hôte) |
+|---------|------|-------|-----------------|-------------|
+| **catalog** | CRUD produits (`/api/v1/products`) | Django + DRF | PostgreSQL 16 (`catalog-db`) | http://localhost:8000 |
+| **avis** | Avis clients (`/api/reviews`) | Symfony 7 + API Platform | MariaDB 10.11 (`avis-db`) | http://localhost:8001 |
+| **commande** | Orchestration des commandes (`/api/orders`) | Symfony 7 + API Platform + Messenger | MariaDB 10.11 (`commande-db`) | http://localhost:8002 |
+
+### Services de référence (équipe Platform / autres équipes)
+
+Présents dans le dépôt comme clones/références (org `3il-flexshop`), **hors** du
+`docker-compose.yml` racine — chacun a sa propre stack Docker autonome.
+
+| Service | Rôle | Stack |
+|---------|------|-------|
+| **platform-gateway-service** | API Gateway, point d'entrée unique (`:80`, dashboard `:8080`) | Traefik v3.1 |
+| **platform-auth-service** | Auth : émet des JWT **RS256**, expose la clé publique en **JWKS** (`/api/auth/login`, `/api/auth/jwks`) | Symfony 7.4 + LexikJWT + PostgreSQL |
+| **payment-service** | Intentions de paiement (`/api/v1/payments`) | Symfony (components) + SQLite |
+| **auth-service** | Squelette Symfony/JWT local (hors orchestration) | Symfony + LexikJWT |
+
+## Architecture (stack orchestrée par le `docker-compose.yml` racine)
 
 ```
-                 réseau Docker : flexshop-net
-   ┌────────────┐   http://catalog:8000   ┌────────────┐
-   │   avis     │ ──────────────────────► │  catalog   │
-   │ (Symfony)  │                          │  (Django)  │
-   └─────┬──────┘                          └─────┬──────┘
-         │ DATABASE_URL=avis-db                  │ POSTGRES_HOST=catalog-db
-   ┌─────▼──────┐                          ┌─────▼──────┐
-   │  avis-db   │                          │ catalog-db │
-   │ (MariaDB)  │  volume avis_data         │ (Postgres) │  volume catalog_data
-   └────────────┘                          └────────────┘
+                        réseau Docker : flexshop-net
+
+   ┌──────────────┐                              ┌──────────────┐
+   │   commande   │ ── http://catalog:8000 ───►  │   catalog    │
+   │  (Symfony)   │      (prix officiel)         │  (Django)    │
+   │  :8002       │                              │  :8000       │
+   └──────┬───────┘                              └──────┬───────┘
+          │  commande-db (MariaDB)                      │  catalog-db (Postgres)
+          │                                             ▲
+   ┌──────▼───────┐                                     │
+   │    avis      │ ── http://catalog:8000 ─────────────┘
+   │  (Symfony)   │      (le produit existe ?)
+   │  :8001       │   avis-db (MariaDB)
+   └──────────────┘
+
+   commande vérifie les JWT (RS256) via le service Auth :
+   JWT_JWKS_URL = http://10.72.200.53/api/auth/jwks   (Auth réel, équipe Platform)
+   Panier & Paiement : mode stub déterministe (services pas encore intégrés).
 ```
 
 ## Pré-requis
@@ -31,7 +64,7 @@ Deux services communs du projet FlexShop, conteneurisés et orchestrés par
 # 1. Préparer les secrets
 cp .env.example .env        # puis ajuster les mots de passe si besoin
 
-# 2. Construire et démarrer les 4 conteneurs
+# 2. Construire et démarrer les 6 conteneurs (3 services + 3 bases)
 docker compose up --build -d
 
 # 3. Vérifier l'état
@@ -40,6 +73,7 @@ docker compose ps
 
 - Catalogue : http://localhost:8000/api/v1/products/ — doc http://localhost:8000/api/docs/
 - Avis-Clients : http://localhost:8001/api/reviews — Swagger http://localhost:8001/api/docs
+- Commande : http://localhost:8002/api/orders — Swagger http://localhost:8002/api/docs
 
 ## Tester la communication inter-services
 
@@ -62,13 +96,16 @@ curl -X POST http://localhost:8001/api/reviews \
   -d '{"rating":4,"comment":"Produit fantome","productId":999999,"author":"Test"}'
 ```
 
+Le service **Commande** protège `/api/orders` par un **JWT RS256** : il faut un jeton valide
+(obtenu via l'Auth) dans l'en-tête `Authorization: Bearer <jwt>` (voir le compte rendu J3).
+
 ## Commandes utiles
 
 ```bash
-docker compose logs -f avis            # logs d'un service
-docker compose exec avis sh            # shell dans le conteneur Symfony
+docker compose logs -f commande        # logs d'un service (catalog / avis / commande)
+docker compose exec avis sh            # shell dans un conteneur Symfony
 docker compose exec catalog sh         # shell dans le conteneur Django
-docker compose restart avis            # redémarrer un service
+docker compose restart commande        # redémarrer un service
 docker compose down                    # arrêter (conserve les volumes/données)
 docker compose down -v                 # tout supprimer, volumes inclus
 ```
@@ -76,16 +113,21 @@ docker compose down -v                 # tout supprimer, volumes inclus
 ## Détails d'implémentation
 
 - **Réseau** : `flexshop-net` (bridge). Les services se joignent par leur **nom**
-  (`catalog`, `avis-db`...) ; depuis `avis`, le Catalogue est sur `http://catalog:8000`
-  (jamais `localhost`). Configuré via la variable `CATALOGUE_BASE_URL`.
-- **Volumes nommés** : `catalog_data` (Postgres) et `avis_data` (MariaDB) — les données
-  survivent à `docker compose down` (vérifié).
-- **Healthchecks** : `catalog` et `avis` attendent que leur base soit `healthy`
+  (`catalog`, `avis-db`, `commande-db`...) ; depuis `avis`/`commande`, le Catalogue est sur
+  `http://catalog:8000` (jamais `localhost`). Configuré via `CATALOGUE_BASE_URL`.
+- **Volumes nommés** : `catalog_data` (Postgres), `avis_data` et `commande_data` (MariaDB) —
+  les données survivent à `docker compose down`.
+- **Healthchecks** : chaque service applicatif attend que sa base soit `healthy`
   (`depends_on: condition: service_healthy`) avant de démarrer.
 - **Migrations** : appliquées automatiquement au démarrage de chaque conteneur applicatif
   (Django `migrate`, Symfony `doctrine:migrations:migrate`).
-- **Catalogue** : `settings.py` bascule sur PostgreSQL si `POSTGRES_HOST` est défini,
-  sinon SQLite (dev local). `ALLOWED_HOSTS` inclut `catalog` (nom de service Docker).
+- **Sécurité (Commande)** : vérification JWT **RS256** par récupération de la clé publique
+  **JWKS** de l'Auth (aucun appel synchrone à l'Auth après le login).
+- **Résilience (Commande)** : appels inter-services en HttpClient avec timeout + retry, et un
+  **circuit breaker** ; Panier et Paiement sont stubés (`CART_STUB_ENABLED`,
+  `PAYMENT_STUB_ENABLED`) tant que ces services ne sont pas intégrés.
+- **Événementiel (Commande)** : publication d'un événement `OrderConfirmed` via **Symfony
+  Messenger** (transport `sync://` en démo, pas de broker requis).
 
 ## CI/CD (J4 — S14)
 
@@ -105,25 +147,34 @@ Récupérer l'image publiée :
 docker pull ghcr.io/oasio/avis-clients-cicd:latest
 ```
 
-Compte rendu : `rendu/J4_S14_CICD_DANILO_Elouan.pdf`.
+## Progression par journée
+
+| Journée | Sujet | Compte rendu |
+|---------|-------|--------------|
+| **J1** | Architecture micro-services (conception) | `rendu/J1_archi_micro-service_DANILO_Elouan.pdf` |
+| **J2 · S7** | Service Avis-Clients (Symfony + API Platform) | `rendu/J2_S7_Symfony_DANILO_Elouan.pdf` |
+| **J2 · S8** | Conteneurisation & orchestration Docker | `rendu/J2_S8_Docker_DANILO_Elouan.pdf` |
+| **J3 · S12** | JWT RS256 (JWKS) dans le service Commande | `rendu/J3_S12_JWT_DANILO_Elouan.pdf` |
+| **J4 · S14** | Pipeline CI/CD (GitHub Actions + ghcr.io) | `rendu/J4_S14_CICD_DANILO_Elouan.pdf` |
 
 ## Structure du dépôt
 
 ```
 J1/
-├── README.md                   # ce fichier (orchestration Docker S8)
-├── docker-compose.yml          # orchestration des 4 services
+├── README.md                   # ce fichier
+├── docker-compose.yml          # orchestration : catalog + avis + commande (+ 3 bases)
 ├── .env.example                # modèle des secrets (à commiter)
 ├── .env                        # secrets réels (NON commité)
 ├── .gitignore
 │
-├── catalog-service/            # service Catalogue (Django + DRF)
-│   ├── Dockerfile              # image Django (python:3.12-slim)
-│   └── .dockerignore
-├── avis-clients/               # service Avis-Clients (Symfony + API Platform)
-│   ├── Dockerfile              # image Symfony (php:8.3-cli)
-│   ├── .dockerignore
-│   └── docker/entrypoint.sh    # attente BD + migrations + serveur
+├── catalog-service/            # service Catalogue (Django + DRF, Postgres)
+├── avis-clients/               # service Avis-Clients (Symfony + API Platform, MariaDB)
+├── commande/                   # service Commande (Symfony + API Platform + Messenger)
+│
+├── platform-gateway-service/   # (référence Platform) API Gateway Traefik + compose
+├── platform-auth-service/      # (référence Platform) Auth JWT RS256 / JWKS
+├── payment-service/            # (référence) service Paiement
+├── auth-service/               # squelette Symfony/JWT local (hors orchestration)
 │
 ├── rendu/                      # LIVRABLES FINAUX à rendre
 │   ├── J1_archi_micro-service_DANILO_Elouan.pdf
